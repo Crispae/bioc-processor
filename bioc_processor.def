@@ -1,0 +1,116 @@
+Bootstrap: docker
+From: python:3.12.6-slim
+
+%labels
+    Author BioProcessor
+    Version 1.0
+    Description BioC to Odinson converter with spaCy NLP
+
+%files
+    bioc-converter /opt/bioc-converter
+    clu-bridge /opt/clu-bridge
+
+%post
+    # Update and install system dependencies
+    apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        git \
+        && rm -rf /var/lib/apt/lists/*
+
+    # Upgrade pip
+    pip install --no-cache-dir --upgrade pip
+
+    # Install Python dependencies
+    pip install --no-cache-dir \
+        spacy>=3.5.0 \
+        bioc>=2.0 \
+        pydantic>=2.0
+
+    # Install clu-bridge and bioc-converter from local copies
+    pip install --no-cache-dir -e /opt/clu-bridge
+    pip install --no-cache-dir -e /opt/bioc-converter
+
+    # Download spaCy model (this is large ~400MB)
+    python -m spacy download en_core_sci_lg
+
+    # Create the processing script
+    cat > /opt/process_bioc.py << 'SCRIPT'
+#!/usr/bin/env python3
+"""Process a single BioC file to Odinson format."""
+import sys
+import argparse
+from pathlib import Path
+import spacy
+from bioc_converter import BiocProcessor
+
+def main():
+    parser = argparse.ArgumentParser(description="Convert BioC XML to Odinson JSON")
+    parser.add_argument("bioc_file", help="Path to BioC XML file")
+    parser.add_argument("output_dir", help="Directory to save output JSON files")
+    parser.add_argument("--no-resume", action="store_true", help="Disable resume mode")
+    parser.add_argument("--combined", action="store_true", help="Single combined output instead of per-section")
+    args = parser.parse_args()
+
+    bioc_path = Path(args.bioc_file)
+    if not bioc_path.exists():
+        print(f"Error: BioC file not found: {bioc_path}", file=sys.stderr)
+        sys.exit(1)
+
+    print("Loading spaCy model...")
+    nlp = spacy.load("en_core_sci_lg")
+
+    print(f"Loading BioC file: {bioc_path}")
+    processor = BiocProcessor(str(bioc_path), nlp)
+    print(f"Found {len(processor)} documents")
+    print(f"Document IDs: {processor.document_ids}")
+
+    def on_progress(current, total, doc_id, status):
+        print(f"[{current}/{total}] {status}: {doc_id}")
+
+    print(f"\nProcessing to: {args.output_dir}")
+    saved_files = processor.process_and_save(
+        output_dir=args.output_dir,
+        by_sections=not args.combined,
+        resume=not args.no_resume,
+        on_progress=on_progress,
+    )
+
+    print(f"\nComplete! Saved {len(saved_files)} files")
+    return 0
+
+if __name__ == "__main__":
+    sys.exit(main())
+SCRIPT
+    chmod +x /opt/process_bioc.py
+
+%environment
+    export LC_ALL=C.UTF-8
+    export LANG=C.UTF-8
+    export PYTHONUNBUFFERED=1
+
+%runscript
+    exec python /opt/process_bioc.py "$@"
+
+%help
+    BioC to Odinson Converter Container (Python 3.12.6)
+
+    Usage:
+        singularity run bioc_processor.sif <bioc_file> <output_dir> [options]
+
+    Arguments:
+        bioc_file   - Path to BioC XML file to process
+        output_dir  - Directory to save output JSON files
+
+    Options:
+        --no-resume  Reprocess all documents (default: resume from existing)
+        --combined   Create single combined document instead of per-section
+
+    Examples:
+        # Basic usage
+        singularity run --bind /data:/data bioc_processor.sif /data/input.BioC.XML /data/output/
+
+        # Without resume (reprocess everything)
+        singularity run --bind /data:/data bioc_processor.sif /data/input.BioC.XML /data/output/ --no-resume
+
+    The container uses resume=True by default, so if processing is interrupted,
+    re-running with the same arguments will continue from where it left off.
