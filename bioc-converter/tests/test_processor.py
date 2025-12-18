@@ -747,3 +747,4 @@ class TestBiocProcessorIntegration:
     def test_full_processing_pipeline(self):
         """Test complete processing pipeline."""
         pass
+
