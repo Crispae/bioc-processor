@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE collection SYSTEM "BioC.dtd">
+<collection>
+  <source>Test</source>
+  <date>2024-01-01</date>
+  <key>test.key</key>
+  <document>
+    <id>12345</id>
+    <infon key="article-id_pmid">12345</infon>
+    <infon key="year">2024</infon>
+    <infon key="month">01</infon>
+    <infon key="day">15</infon>
+    <passage>
+      <infon key="section_type">TITLE</infon>
+      <infon key="type">title</infon>
+      <offset>0</offset>
+      <text>Effects of Drug A on Disease B</text>
+      <annotation id="1">
+        <infon key="type">CHEMICAL</infon>
+        <location offset="11" length="6"/>
+        <text>Drug A</text>
+      </annotation>
+      <annotation id="2">
+        <infon key="type">DISEASE</infon>
+        <location offset="21" length="9"/>
+        <text>Disease B</text>
+      </annotation>
+    </passage>
+    <passage>
+      <infon key="section_type">ABSTRACT</infon>
+      <infon key="type">abstract</infon>
+      <offset>31</offset>
+      <text>This study examines the therapeutic effects of Drug A in patients with Disease B. Results show significant improvement.</text>
+      <annotation id="3">
+        <infon key="type">CHEMICAL</infon>
+        <location offset="78" length="6"/>
+        <text>Drug A</text>
+      </annotation>
+      <annotation id="4">
+        <infon key="type">DISEASE</infon>
+        <location offset="102" length="9"/>
+        <text>Disease B</text>
+      </annotation>
+    </passage>
+  </document>
+</collection>

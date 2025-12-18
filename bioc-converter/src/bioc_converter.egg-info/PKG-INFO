@@ -1,0 +1,401 @@
+Metadata-Version: 2.4
+Name: bioc-converter
+Version: 0.1.0
+Summary: Convert BioC XML documents to Odinson JSON format
+Author: BioCProcessor Team
+License: MIT
+Project-URL: Homepage, https://github.com/your-org/bioc-converter
+Project-URL: Documentation, https://github.com/your-org/bioc-converter#readme
+Project-URL: Repository, https://github.com/your-org/bioc-converter
+Keywords: bioc,odinson,nlp,biomedical,text-mining
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Science/Research
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Natural Language :: English
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+Classifier: Topic :: Scientific/Engineering :: Bio-Informatics
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: bioc>=2.1.0
+Requires-Dist: spacy>=3.0.0
+Requires-Dist: pydantic<3.0.0,>=1.8.0
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0.0; extra == "dev"
+Requires-Dist: pytest-cov>=4.0.0; extra == "dev"
+Requires-Dist: black>=23.0.0; extra == "dev"
+Requires-Dist: mypy>=1.0.0; extra == "dev"
+Provides-Extra: scispacy
+Requires-Dist: scispacy>=0.5.0; extra == "scispacy"
+Dynamic: license-file
+
+# bioc-converter
+
+A Python library for converting BioC XML documents to Odinson JSON format.
+
+## Overview
+
+`bioc-converter` provides tools for converting BioC XML documents (commonly used in biomedical text mining) to Odinson format (used for pattern-based information extraction with the [Odinson](https://github.com/lum-ai/odinson) rule engine).
+
+## Features
+
+- Load and parse BioC XML files
+- Extract documents with annotations
+- Split text into sentences using spaCy
+- Map annotations to sentence-level offsets
+- Convert to Odinson document format
+- Support for section filtering and grouping
+- Section-based processing (one Odinson doc per section)
+- Output as JSON or compressed tar.gz archives
+
+## Installation
+
+### Local Development
+
+```bash
+cd bioc-converter
+pip install -e .
+```
+
+### With Optional Dependencies
+
+```bash
+# For development tools
+pip install -e ".[dev]"
+
+# For scientific/biomedical spaCy models
+pip install -e ".[scispacy]"
+```
+
+### Dependencies
+
+This package requires:
+
+- `bioc>=2.1.0` - BioC XML parsing
+- `spacy>=3.0.0` - NLP processing
+- `pydantic>=1.8.0` - Data validation
+- `clu-bridge` - Odinson format conversion
+
+Install clu-bridge separately:
+
+```bash
+# From local path
+pip install -e ../clu-bridge
+
+# Or from git
+pip install git+https://github.com/clulab/clu-bridge.git
+```
+
+### spaCy Models
+
+Download a spaCy model for sentence splitting and NLP processing:
+
+```bash
+# General English
+python -m spacy download en_core_web_sm
+
+# Scientific/Biomedical (requires scispacy)
+pip install scispacy
+pip install https://s3-us-west-2.amazonaws.com/ai2-s2-scispacy/releases/v0.5.3/en_core_sci_sm-0.5.3.tar.gz
+```
+
+## Quick Start
+
+### Basic Usage
+
+```python
+import spacy
+from bioc_converter import convert_bioc_to_odinson, save_odinson_json
+
+# Load spaCy model
+nlp = spacy.load("en_core_sci_sm")
+
+# Convert BioC document to Odinson format
+odinson_doc = convert_bioc_to_odinson(
+    bioc_file_path="document.bioc.xml",
+    document_id="12345",
+    nlp=nlp,
+    combine_sentences=True
+)
+
+# Save to JSON file
+save_odinson_json(odinson_doc, "output.json")
+```
+
+### Convert Plain Text
+
+If you have text with annotations (not from BioC):
+
+```python
+from bioc_converter import convert_text_to_odinson
+
+text = "The patient was diagnosed with diabetes. Treatment included insulin therapy."
+annotations = [
+    {"span": {"begin": 31, "end": 39}, "obj": "DISEASE"},
+    {"span": {"begin": 61, "end": 68}, "obj": "CHEMICAL"},
+]
+
+odinson_doc = convert_text_to_odinson(text, annotations, nlp)
+```
+
+### Section-Based Processing (Notebook Workflow)
+
+For processing that matches the `BioC_2_odinson.ipynb` notebook workflow - grouping passages by section first, then processing each section separately:
+
+```python
+from bioc_converter import process_bioc_by_sections, save_odinson_sections
+
+# Process by sections (returns dict: section_name -> OdinsonDoc)
+odinson_docs = process_bioc_by_sections(
+    bioc_file_path="document.bioc.xml",
+    document_id="12345",
+    nlp=nlp
+)
+
+# Result: {"TITLE": OdinsonDoc, "ABSTRACT": OdinsonDoc, "INTRO": OdinsonDoc, ...}
+print(f"Sections: {list(odinson_docs.keys())}")
+
+# Save each section as separate JSON file
+save_odinson_sections(
+    odinson_docs,
+    folder_path="output/sections/",
+    doc_name="12345",
+    compress=True  # Creates tar.gz archive
+)
+# Output:
+#   Saved: 12345_title.json (1 sentences)
+#   Saved: 12345_abstract.json (9 sentences)
+#   Saved: 12345_intro.json (234 sentences)
+#   ...
+#   Created archive: 12345_sections.tar.gz (167.25 KB)
+```
+
+### Group by Section (Alternative)
+
+```python
+odinson_docs = convert_bioc_to_odinson(
+    bioc_file_path="document.bioc.xml",
+    document_id="12345",
+    nlp=nlp,
+    group_by_section=True
+)
+
+# Save with compression
+save_odinson_json(odinson_docs, "output.json", compress_multiple=True)
+```
+
+### Section Filtering
+
+Filter which sections to process using a config file:
+
+```json
+{
+  "allowed_sections": ["TITLE", "ABSTRACT", "METHODS", "RESULTS"],
+  "case_sensitive": false
+}
+```
+
+```python
+odinson_doc = convert_bioc_to_odinson(
+    bioc_file_path="document.bioc.xml",
+    document_id="12345",
+    nlp=nlp,
+    section_config_path="section_config.json"
+)
+```
+
+### Load Multiple Documents
+
+```python
+from bioc_converter import load_bioc_collection
+
+# Load all documents from a BioC file
+documents = load_bioc_collection("collection.bioc.xml")
+
+for doc_data in documents:
+    odinson_doc = convert_bioc_to_odinson(
+        bioc_file_path="",  # Not needed when doc_data provided
+        document_id="",
+        nlp=nlp,
+        doc_data=doc_data
+    )
+    save_odinson_json(odinson_doc, f"output/{doc_data.doc_id}.json")
+```
+
+## API Reference
+
+### Main Functions
+
+#### `convert_bioc_to_odinson()`
+
+Convert a BioC document to Odinson format.
+
+```python
+convert_bioc_to_odinson(
+    bioc_file_path: str,
+    document_id: str,
+    nlp: Language,
+    combine_sentences: bool = True,
+    doc_data: Optional[DocumentData] = None,
+    group_by_section: bool = False,
+    section_config: Optional[Dict] = None,
+    section_config_path: Optional[str] = None,
+    verbose: bool = True
+) -> Union[OdinsonDocument, List[OdinsonDocument]]
+```
+
+#### `process_bioc_by_sections()`
+
+Process BioC document by sections (notebook workflow).
+
+```python
+process_bioc_by_sections(
+    bioc_file_path: str,
+    document_id: str,
+    nlp: Language,
+    verbose: bool = True
+) -> Dict[str, OdinsonDocument]
+# Returns: {"TITLE": OdinsonDoc, "ABSTRACT": OdinsonDoc, ...}
+```
+
+#### `save_odinson_sections()`
+
+Save section-based Odinson documents to separate JSON files.
+
+```python
+save_odinson_sections(
+    odinson_docs: Dict[str, OdinsonDocument],
+    folder_path: str,
+    doc_name: str,
+    compress: bool = False,
+    verbose: bool = True
+) -> List[Path]
+```
+
+#### `convert_text_to_odinson()`
+
+Convert plain text with annotations to Odinson format.
+
+```python
+convert_text_to_odinson(
+    text: str,
+    annotations: List[Dict],
+    nlp: Language,
+    doc_id: str = "document",
+    combine_sentences: bool = True,
+    metadata_fields: Optional[List] = None
+) -> Union[OdinsonDocument, List[OdinsonDocument]]
+```
+
+#### `save_odinson_json()`
+
+Save Odinson document(s) to JSON file.
+
+```python
+save_odinson_json(
+    odinson_doc: Union[OdinsonDocument, List[OdinsonDocument]],
+    output_path: str,
+    compress_multiple: bool = False,
+    verbose: bool = True
+) -> None
+```
+
+#### `load_bioc_document()`
+
+Load a single document from a BioC XML file.
+
+```python
+load_bioc_document(
+    bioc_file_path: str,
+    document_id: str,
+    section_config: Optional[Dict] = None,
+    verbose: bool = True
+) -> DocumentData
+```
+
+### Data Models
+
+#### `Annotation`
+
+Represents an entity annotation with span and label.
+
+```python
+@dataclass
+class Annotation:
+    begin: int      # Start character offset
+    end: int        # End character offset (exclusive)
+    label: str      # Entity type (e.g., "DISEASE")
+    text: Optional[str] = None
+    id: Optional[str] = None
+```
+
+#### `SentenceAnnotation`
+
+Represents a sentence with its annotations.
+
+```python
+@dataclass
+class SentenceAnnotation:
+    text: str
+    annotations: List[Annotation]
+    sentence_id: Optional[str] = None
+    abs_start: Optional[int] = None  # Absolute offset in document
+    abs_end: Optional[int] = None
+```
+
+#### `DocumentData`
+
+Represents a loaded BioC document.
+
+```python
+@dataclass
+class DocumentData:
+    doc_id: str
+    text: str
+    annotations: List[Dict]
+    infons: Dict
+    metadata_source: Dict
+```
+
+## Output Format
+
+The output is an Odinson JSON document with:
+
+- **id**: Unique document identifier
+- **metadata**: Array of metadata fields (doc_id, pub_date, section)
+- **sentences**: Array of sentence objects with:
+  - **numTokens**: Number of tokens
+  - **fields**: Token-level fields (raw, word, lemma, tag, entity, etc.)
+
+Example output:
+
+```json
+{
+  "$type": "ai.lum.odinson.Document",
+  "id": "abc123",
+  "metadata": [
+    {"$type": "ai.lum.odinson.TokensField", "name": "doc_id", "tokens": ["12345"]},
+    {"$type": "ai.lum.odinson.TokensField", "name": "section", "tokens": ["ABSTRACT"]}
+  ],
+  "sentences": [
+    {
+      "numTokens": 8,
+      "fields": [
+        {"$type": "ai.lum.odinson.TokensField", "name": "raw", "tokens": ["The", "patient", "..."]},
+        {"$type": "ai.lum.odinson.TokensField", "name": "entity", "tokens": ["O", "O", "..."]}
+      ]
+    }
+  ]
+}
+```
+
+## License
+
+MIT License - see [LICENSE](LICENSE) for details.
+

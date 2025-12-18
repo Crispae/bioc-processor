@@ -1,0 +1,12 @@
+bioc>=2.1.0
+spacy>=3.0.0
+pydantic<3.0.0,>=1.8.0
+
+[dev]
+pytest>=7.0.0
+pytest-cov>=4.0.0
+black>=23.0.0
+mypy>=1.0.0
+
+[scispacy]
+scispacy>=0.5.0

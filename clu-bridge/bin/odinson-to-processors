@@ -1,0 +1,53 @@
+from clu.bridge import odinson, processors
+from clu.bridge.conversion import ConversionUtils
+from pathlib import Path
+from typing import Text
+from multiprocessing import Pool
+import requests
+import json
+import os
+import argparse
+
+def test():
+  fp = "/Users/hahnpowell/data/lum-ai/customers/cgiar/docs/odinson/17-Dawoe-2016.pdf.json"
+  od = odinson.Document.parse_file(fp)
+  pdoc = ConversionUtils.to_processors(od)
+  url = "http://localhost:9000/api/extract-from-doc"
+  res = requests.post(url, json=pdoc.dict(exclude_none=True))
+  print(res.status_code)
+
+def convert_and_write(infile: Text, outfile: Text) -> None:
+  """Converts a `ai.lum.odinson.Document` JSON file to `org.clulab.processors.Document` JSON file 
+  and writes the output to the given file.
+  """
+  print(f"o: {outfile}")
+  od = odinson.Document.parse_file(infile)
+  pdoc = ConversionUtils.to_processors(od)
+  with open(outfile, "w") as out:
+    json_data = json.dumps(pdoc.dict(exclude_none=True))
+    print(f"o: {outfile}")
+    out.write(json_data)
+
+if __name__ == "__main__":
+  parser = argparse.ArgumentParser(description="Convert directory of `ai.lum.odinson.Document` JSON files to `org.clulab.processors.Document` JSON files.")
+  parser.add_argument("--input", "-i", help="Directory containing `ai.lum.odinson.Document` JSON files.  Can be nested.", required=True)
+  parser.add_argument("--output", "-o", help="Output directory for `org.clulab.processors.Document` JSON files.  Will be created if it doesn't already exist.", required=True)
+
+  args = parser.parse_args()
+
+  input_dir = os.path.abspath(os.path.expanduser(args.input))
+  output_dir = os.path.abspath(os.path.expanduser(args.output))
+  print(f"""
+  input_dir:\t{input_dir}
+  output_dir:\t{output_dir}
+  """
+  )
+
+  os.makedirs(output_dir, exist_ok=True)
+
+  input_files = [p for p in Path(input_dir).rglob("*") if p.suffix.lower() == ".json"]
+  output_files = [os.path.join(output_dir, p.name) for p in input_files]
+
+  for pair in zip(input_files, output_files):
+    convert_and_write(*pair)
+

@@ -1,0 +1,4 @@
+pydantic
+fastapi[all]==0.85.0
+uvicorn==0.18.3
+spacy

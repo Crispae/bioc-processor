@@ -1,0 +1,14 @@
+# Core dependencies for bioc-converter
+bioc>=2.1.0
+spacy>=3.0.0
+pydantic>=1.8.0,<3.0.0
+
+# clu-bridge is required for Odinson conversion
+# Install from local path or git:
+# pip install -e ../clu-bridge
+# Or: pip install git+https://github.com/clulab/clu-bridge.git
+
+# Optional: For scientific/biomedical text processing
+# scispacy>=0.5.0
+# pip install https://s3-us-west-2.amazonaws.com/ai2-s2-scispacy/releases/v0.5.3/en_core_sci_sm-0.5.3.tar.gz
+
