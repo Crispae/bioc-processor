@@ -21,6 +21,25 @@ Basic Usage:
     >>> # Save output
     >>> save_odinson_json(odinson_doc, "output.json")
 
+For batch processing entire BioC collections (recommended):
+    >>> from bioc_converter import BiocProcessor
+    >>>
+    >>> # Initialize with file and NLP model
+    >>> processor = BiocProcessor("data/collection.bioc.xml", nlp)
+    >>>
+    >>> # Discover documents
+    >>> print(processor.document_ids)  # ['35215501', '35200688', ...]
+    >>> print(len(processor))  # Number of documents
+    >>>
+    >>> # Process and save incrementally - safe from crashes
+    >>> saved_files = processor.process_and_save(
+    ...     output_dir="output/sections/",
+    ...     by_sections=True,
+    ...     resume=True,  # Skip already-processed docs on re-run
+    ... )
+    >>>
+    >>> # If it crashes, just run again - it will resume from where it left off
+
 For section-based processing (one Odinson doc per section):
     >>> from bioc_converter import process_bioc_by_sections, save_odinson_sections
     >>>
@@ -49,6 +68,12 @@ from .converter import (
     convert_text_to_odinson,
     save_odinson_json,
     save_odinson_sections,
+)
+
+# Batch processing API
+from .processor import (
+    BiocProcessor,
+    ProcessedDocument,
 )
 
 # Section-based processing (notebook workflow)
@@ -96,6 +121,9 @@ __all__ = [
     "convert_text_to_odinson",
     "save_odinson_json",
     "save_odinson_sections",
+    # Batch Processing API
+    "BiocProcessor",
+    "ProcessedDocument",
     # Section-based processing (notebook workflow)
     "process_bioc_by_sections",
     "group_passages_by_section",
@@ -118,4 +146,3 @@ __all__ = [
     "build_odinson_metadata_fields",
     "group_sentence_annotations_by_section",
 ]
-
