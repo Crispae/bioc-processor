@@ -7,6 +7,9 @@
 #SBATCH --output=logs/bioc_%A_%a.out
 #SBATCH --error=logs/bioc_%A_%a.err
 
+set -euo pipefail
+trap 'rc=$?; echo "Script exiting with code $rc"; exit $rc' EXIT
+
 # =============================================================================
 # BioC to Odinson Batch Processing with Singularity
 # =============================================================================
@@ -18,6 +21,7 @@
 #
 # Usage:
 #   sbatch submit_bioc_array.sh
+#   Or for local testing: SLURM_ARRAY_TASK_ID=1 ./submit_bioc_array.sh
 #
 # To resubmit failed tasks:
 #   sbatch --array=5,12,47 submit_bioc_array.sh
@@ -25,18 +29,40 @@
 
 # Configuration - MODIFY THESE PATHS
 FILE_LIST="file_list.txt"
-OUTPUT_BASE="/scratch/$USER/bioc_output"
-CONTAINER="bioc_processor.sif"
+# Default to locations under /shared/bfr027 so this script only uses allowed paths
+SHARED_ROOT="/shared/bfr027"
+OUTPUT_BASE="${SHARED_ROOT}/bioc_output"
+# Allow overriding CONTAINER with an absolute path, but default to the shared dir
+CONTAINER="${SHARED_ROOT}/bioc-processor/bioc_processor.sif"
 
-# Create output base directory
+# Basic checks
+if [ ! -f "$FILE_LIST" ]; then
+    echo "Error: FILE_LIST not found: $FILE_LIST"
+    exit 1
+fi
+
+if ! command -v singularity >/dev/null 2>&1; then
+    echo "Error: singularity not found in PATH"
+    exit 1
+fi
+
+if [ ! -f "$CONTAINER" ]; then
+    echo "Error: container not found: $CONTAINER"
+    exit 1
+fi
+
 mkdir -p "$OUTPUT_BASE"
+mkdir -p "$SHARED_ROOT"
+mkdir -p logs
 
-# Get the file for this array task
-BIOC_FILE=$(sed -n "${SLURM_ARRAY_TASK_ID}p" "$FILE_LIST")
+# Allow running outside SLURM for testing: CLI arg or SLURM_ARRAY_TASK_ID
+TASK_ID="${SLURM_ARRAY_TASK_ID:-${1:-1}}"
 
-# Skip if empty line
+# Get the file for this array task (skip empty lines, handle CRLF)
+BIOC_FILE=$(sed -n "${TASK_ID}p" "$FILE_LIST" | tr -d '\r')
+
 if [ -z "$BIOC_FILE" ]; then
-    echo "No file for task $SLURM_ARRAY_TASK_ID"
+    echo "No file for task $TASK_ID"
     exit 0
 fi
 
@@ -46,22 +72,25 @@ if [ ! -f "$BIOC_FILE" ]; then
     exit 1
 fi
 
-# Create output directory based on input filename
-BASENAME=$(basename "$BIOC_FILE" .BioC.XML)
-BASENAME=$(basename "$BASENAME" .bioc.xml)  # Handle both cases
+# Create output directory based on input filename (case-insensitive strip of .bioc.xml)
+BASENAME=$(basename "$BIOC_FILE")
+# strip .bioc.xml or .BioC.XML (case-insensitive)
+BASENAME=${BASENAME%.[Bb][iI][oO][cC].[xX][mM][lL]}
 OUTPUT_DIR="${OUTPUT_BASE}/${BASENAME}"
 
 echo "============================================"
-echo "Job Array Task: $SLURM_ARRAY_TASK_ID"
+echo "Job Array Task: $TASK_ID"
 echo "Input File: $BIOC_FILE"
 echo "Output Dir: $OUTPUT_DIR"
+echo "Container: $CONTAINER"
 echo "Start Time: $(date)"
 echo "============================================"
 
-# Run the container
+# Run the container (bind current dir and output base)
 singularity run \
-    --bind /data:/data \
-    --bind /scratch:/scratch \
+    --bind "$PWD":"$PWD" \
+    --bind "$OUTPUT_BASE":"$OUTPUT_BASE" \
+    --bind "$SHARED_ROOT":"$SHARED_ROOT" \
     "$CONTAINER" \
     "$BIOC_FILE" \
     "$OUTPUT_DIR"

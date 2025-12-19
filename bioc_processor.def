@@ -22,7 +22,7 @@ From: python:3.12.6-slim
 
     # Install Python dependencies
     pip install --no-cache-dir \
-        spacy>=3.5.0 \
+        scispacy \
         bioc>=2.0 \
         pydantic>=2.0
 
@@ -31,7 +31,7 @@ From: python:3.12.6-slim
     pip install --no-cache-dir -e /opt/bioc-converter
 
     # Download spaCy model (this is large ~400MB)
-    python -m spacy download en_core_sci_lg
+    pip install https://s3-us-west-2.amazonaws.com/ai2-s2-scispacy/releases/v0.5.4/en_core_sci_lg-0.5.4.tar.gz
 
     # Create the processing script
     cat > /opt/process_bioc.py << 'SCRIPT'

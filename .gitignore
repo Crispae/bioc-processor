@@ -1,3 +1,6 @@
 output/
 data/
 __pycache__/
+logs/
+bioc_processor.sif
+file_list.txt
