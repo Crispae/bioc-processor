@@ -153,16 +153,20 @@ for ((start=1; start<=NUM_FILES; start+=CHUNK_SIZE)); do
     if [ "$DRY_RUN" = true ]; then
         echo -e "    ${YELLOW}[DRY RUN] Would run: sbatch --array=${ARRAY_SPEC} ${JOB_SCRIPT}${NC}"
     else
-        # Submit the job and capture job ID
-        OUTPUT=$(sbatch --array="${ARRAY_SPEC}" "$JOB_SCRIPT" 2>&1)
+        # Submit the job and capture job ID (|| true prevents set -e from exiting)
+        OUTPUT=$(sbatch --array="${ARRAY_SPEC}" "$JOB_SCRIPT" 2>&1) || true
         
-        if [ $? -eq 0 ]; then
-            JOB_ID=$(echo "$OUTPUT" | grep -oP '\d+' | head -1)
+        # Check if submission succeeded by looking for job ID in output
+        if echo "$OUTPUT" | grep -q "Submitted batch job"; then
+            JOB_ID=$(echo "$OUTPUT" | grep -oE '[0-9]+' | tail -1)
             JOB_IDS+=("$JOB_ID")
             echo -e "    ${GREEN}✓ Submitted: Job ID ${JOB_ID}${NC}"
         else
             echo -e "    ${RED}✗ Failed to submit: ${OUTPUT}${NC}"
         fi
+        
+        # Small delay between submissions to avoid rate limiting
+        sleep 1
     fi
 done
 
