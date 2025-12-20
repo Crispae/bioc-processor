@@ -181,3 +181,4 @@ The container includes `en_core_sci_lg`. If you need a different model, rebuild 
 ```bash
 singularity exec bioc_processor.sif python -m spacy download <model_name>
 ```
+

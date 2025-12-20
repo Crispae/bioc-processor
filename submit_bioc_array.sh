@@ -46,10 +46,7 @@ if [ ! -f "$FILE_LIST" ]; then
     exit 1
 fi
 
-if ! command -v singularity >/dev/null 2>&1; then
-    echo "Error: singularity not found in PATH"
-    exit 1
-fi
+# Note: singularity check removed - cluster validates singularity commands
 
 if [ ! -f "$CONTAINER" ]; then
     echo "Error: container not found: $CONTAINER"
@@ -91,11 +88,10 @@ echo "Container: $CONTAINER"
 echo "Start Time: $(date)"
 echo "============================================"
 
-# Run the container (bind current dir and output base)
-singularity run \
-    --bind "$PWD":"$PWD" \
-    --bind "$OUTPUT_BASE":"$OUTPUT_BASE" \
-    --bind "$SHARED_ROOT":"$SHARED_ROOT" \
+# Run the container (using cluster-required singularity format)
+singularity run -c \
+    --bind /shared/$USER:/shared/$USER,/home/$USER:/home/$USER \
+    --net --network none \
     "$CONTAINER" \
     "$BIOC_FILE" \
     "$OUTPUT_DIR"
