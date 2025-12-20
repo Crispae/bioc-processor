@@ -88,13 +88,8 @@ echo "Container: $CONTAINER"
 echo "Start Time: $(date)"
 echo "============================================"
 
-# Run the container (using cluster-required singularity format)
-singularity run -c \
-    --bind /shared/$USER:/shared/$USER,/home/$USER:/home/$USER \
-    --net --network none \
-    "$CONTAINER" \
-    "$BIOC_FILE" \
-    "$OUTPUT_DIR"
+# Run the container (using cluster-required singularity format - must be on single line)
+singularity run -c --bind /shared/$USER:/shared/$USER,/home/$USER:/home/$USER --net --network none "$CONTAINER" "$BIOC_FILE" "$OUTPUT_DIR"
 
 EXIT_CODE=$?
 
