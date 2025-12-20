@@ -28,17 +28,32 @@ Edit `submit_bioc_array.sh`:
 - Set `FILE_LIST` to your file list path
 - Set `OUTPUT_BASE` to your output directory
 - Set `CONTAINER` to your container path
-- Adjust `--array=1-N` where N is number of files
 - Adjust `--bind` paths for your HPC
 
 ### 4. Submit Job
+
+For large file lists (1000+ files), use the chunk-based submission script:
+
+```bash
+# Recommended: Auto-detects file count and submits in chunks
+./submit_chunks.sh
+
+# Preview what will be submitted without actually submitting
+./submit_chunks.sh --dry-run
+
+# Custom chunk size (default: 1000)
+./submit_chunks.sh --chunk-size 500
+```
+
+For smaller file lists, you can submit manually:
 
 ```bash
 # Create logs directory
 mkdir -p logs
 
-# Submit the job array
-sbatch submit_bioc_array.sh
+# Count files and submit with correct range
+NUM_FILES=$(wc -l < file_list.txt)
+sbatch --array=1-${NUM_FILES}%20 submit_bioc_array.sh
 ```
 
 ### 5. Monitor Progress
@@ -95,6 +110,36 @@ The processor automatically resumes from where it left off:
 ```bash
 # Resubmit specific failed tasks
 sbatch --array=5,12,47 submit_bioc_array.sh
+```
+
+## Chunk-based Submission for Large File Lists
+
+For file lists with thousands of files, use `submit_chunks.sh` to automatically submit jobs in manageable chunks:
+
+```bash
+# Basic usage - auto-detects file count
+./submit_chunks.sh
+
+# Options
+./submit_chunks.sh --chunk-size 500      # Files per chunk (default: 1000)
+./submit_chunks.sh --max-concurrent 10   # Max parallel jobs (default: 20)
+./submit_chunks.sh --file-list other.txt # Use different file list
+./submit_chunks.sh --dry-run             # Preview without submitting
+```
+
+Benefits of chunk-based submission:
+- No need to manually count files or edit array ranges
+- Better progress tracking (completed chunks vs pending)
+- Easier to identify and resubmit failed chunks
+- Smaller jobs may start sooner on busy clusters
+
+Example output:
+```
+  Chunk 1/12: files 1-1000 (1-1000%20)
+    ✓ Submitted: Job ID 12345
+  Chunk 2/12: files 1001-2000 (1001-2000%20)
+    ✓ Submitted: Job ID 12346
+  ...
 ```
 
 ## Output Structure

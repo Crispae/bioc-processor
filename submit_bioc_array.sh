@@ -1,6 +1,5 @@
 #!/bin/bash
 #SBATCH --job-name=bioc_convert
-#SBATCH --array=1-100%20              # Adjust range; max 20 concurrent jobs
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=16G
 #SBATCH --time=04:00:00
@@ -20,8 +19,14 @@ trap 'rc=$?; echo "Script exiting with code $rc"; exit $rc' EXIT
 #   3. Create logs directory: mkdir -p logs
 #
 # Usage:
-#   sbatch submit_bioc_array.sh
-#   Or for local testing: SLURM_ARRAY_TASK_ID=1 ./submit_bioc_array.sh
+#   Use submit_chunks.sh for automatic chunk-based submission:
+#     ./submit_chunks.sh
+#
+#   Or submit manually with array range:
+#     sbatch --array=1-1000%20 submit_bioc_array.sh
+#
+#   For local testing:
+#     SLURM_ARRAY_TASK_ID=1 ./submit_bioc_array.sh
 #
 # To resubmit failed tasks:
 #   sbatch --array=5,12,47 submit_bioc_array.sh
