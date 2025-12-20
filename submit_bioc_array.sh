@@ -58,7 +58,12 @@ mkdir -p "$SHARED_ROOT"
 mkdir -p logs
 
 # Allow running outside SLURM for testing: CLI arg or SLURM_ARRAY_TASK_ID
-TASK_ID="${SLURM_ARRAY_TASK_ID:-${1:-1}}"
+ARRAY_TASK_ID="${SLURM_ARRAY_TASK_ID:-${1:-1}}"
+
+# FILE_OFFSET is passed from submit_chunks.sh to handle MaxArraySize limits
+# The actual line number = ARRAY_TASK_ID + FILE_OFFSET
+FILE_OFFSET="${FILE_OFFSET:-0}"
+TASK_ID=$((ARRAY_TASK_ID + FILE_OFFSET))
 
 # Get the file for this array task (skip empty lines, handle CRLF)
 BIOC_FILE=$(sed -n "${TASK_ID}p" "$FILE_LIST" | tr -d '\r')
@@ -81,7 +86,7 @@ BASENAME=${BASENAME%.[Bb][iI][oO][cC].[xX][mM][lL]}
 OUTPUT_DIR="${OUTPUT_BASE}/${BASENAME}"
 
 echo "============================================"
-echo "Job Array Task: $TASK_ID"
+echo "Job Array Task: $ARRAY_TASK_ID (File Line: $TASK_ID, Offset: $FILE_OFFSET)"
 echo "Input File: $BIOC_FILE"
 echo "Output Dir: $OUTPUT_DIR"
 echo "Container: $CONTAINER"

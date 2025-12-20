@@ -146,15 +146,18 @@ for ((start=1; start<=NUM_FILES; start+=CHUNK_SIZE)); do
         end=$NUM_FILES
     fi
     
-    ARRAY_SPEC="${start}-${end}%${MAX_CONCURRENT}"
+    # Calculate array size for this chunk (always start from 1 to respect MaxArraySize)
+    ARRAY_SIZE=$((end - start + 1))
+    ARRAY_SPEC="1-${ARRAY_SIZE}%${MAX_CONCURRENT}"
+    FILE_OFFSET=$((start - 1))
     
-    echo -e "  Chunk ${CHUNK_NUM}/${NUM_CHUNKS}: files ${start}-${end} (${ARRAY_SPEC})"
+    echo -e "  Chunk ${CHUNK_NUM}/${NUM_CHUNKS}: files ${start}-${end} (array=${ARRAY_SPEC}, offset=${FILE_OFFSET})"
     
     if [ "$DRY_RUN" = true ]; then
-        echo -e "    ${YELLOW}[DRY RUN] Would run: sbatch --array=${ARRAY_SPEC} ${JOB_SCRIPT}${NC}"
+        echo -e "    ${YELLOW}[DRY RUN] Would run: sbatch --array=${ARRAY_SPEC} --export=ALL,FILE_OFFSET=${FILE_OFFSET} ${JOB_SCRIPT}${NC}"
     else
-        # Submit the job and capture job ID (|| true prevents set -e from exiting)
-        OUTPUT=$(sbatch --array="${ARRAY_SPEC}" "$JOB_SCRIPT" 2>&1) || true
+        # Submit the job with FILE_OFFSET environment variable (|| true prevents set -e from exiting)
+        OUTPUT=$(sbatch --array="${ARRAY_SPEC}" --export=ALL,FILE_OFFSET=${FILE_OFFSET} "$JOB_SCRIPT" 2>&1) || true
         
         # Check if submission succeeded by looking for job ID in output
         if echo "$OUTPUT" | grep -q "Submitted batch job"; then
