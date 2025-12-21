@@ -18,7 +18,7 @@ set -euo pipefail
 
 # Default configuration
 CHUNK_SIZE=1000
-MAX_CONCURRENT=20
+MAX_CONCURRENT=50
 FILE_LIST="file_list.txt"
 DRY_RUN=false
 JOB_SCRIPT="submit_bioc_array.sh"
