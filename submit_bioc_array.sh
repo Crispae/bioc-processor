@@ -94,7 +94,7 @@ echo "Start Time: $(date)"
 echo "============================================"
 
 # Run the container (using cluster-required singularity format - must be on single line)
-singularity run -c --bind /shared/$USER:/shared/$USER,/home/$USER:/home/$USER --net --network none ${CONTAINER} ${BIOC_FILE} ${OUTPUT_DIR}
+singularity run -c --bind /shared/$USER:/shared/$USER,/home/$USER:/home/$USER --net --network none /shared/bfr027/bioc-processor/bioc_processor.sif ${BIOC_FILE} ${OUTPUT_DIR}
 
 EXIT_CODE=$?
 
