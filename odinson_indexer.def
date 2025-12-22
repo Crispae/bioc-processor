@@ -7,7 +7,8 @@ From: adoptopenjdk:11-jdk
     Description Odinson Document Indexer for creating Lucene indexes from Odinson JSON documents
 
 %files
-    odinson /opt/odinson
+    # Copy odinson directory INTO /opt/ so it becomes /opt/odinson/
+    odinson /opt/
 
 %post
     # Update and install system dependencies
@@ -25,6 +26,17 @@ From: adoptopenjdk:11-jdk
 
     # Build Odinson extra module (contains IndexDocuments)
     cd /opt/odinson
+    
+    # Verify odinson files were copied correctly
+    echo "=== Verifying odinson directory structure ==="
+    ls -la /opt/odinson/
+    if [ ! -f /opt/odinson/build.sbt ]; then
+        echo "ERROR: build.sbt not found in /opt/odinson/"
+        echo "Contents of /opt/:"
+        ls -la /opt/
+        exit 1
+    fi
+    echo "=== build.sbt found, proceeding with build ==="
     
     # Pre-fetch dependencies and compile
     sbt "extra/compile"
