@@ -4,3 +4,10 @@ __pycache__/
 logs/
 bioc_processor.sif
 file_list.txt
+odinson/
+.metals/
+.bloop/
+.bsp/
+.cursor/
+.cursor/
+.vscode/

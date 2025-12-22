@@ -1,0 +1,238 @@
+Bootstrap: docker
+From: adoptopenjdk:11-jdk
+
+%labels
+    Author BioProcessor
+    Version 1.0
+    Description Odinson Document Indexer for creating Lucene indexes from Odinson JSON documents
+
+%files
+    odinson /opt/odinson
+
+%post
+    # Update and install system dependencies
+    apt-get update && apt-get install -y --no-install-recommends \
+        curl \
+        gnupg2 \
+        git \
+        && rm -rf /var/lib/apt/lists/*
+
+    # Install sbt 1.6.2 (matching project requirements)
+    echo "deb https://repo.scala-sbt.org/scalasbt/debian all main" | tee /etc/apt/sources.list.d/sbt.list
+    echo "deb https://repo.scala-sbt.org/scalasbt/debian /" | tee /etc/apt/sources.list.d/sbt_old.list
+    curl -sL "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x2EE0EA64E40A89B84B2DF73499E82A75642AC823" | apt-key add
+    apt-get update && apt-get install -y sbt
+
+    # Build Odinson extra module (contains IndexDocuments)
+    cd /opt/odinson
+    
+    # Pre-fetch dependencies and compile
+    sbt "extra/compile"
+    
+    # Create the indexer configuration file
+    cat > /opt/odinson/indexer.conf << 'INDEXER_CONF'
+# Odinson Indexer Configuration
+# These paths are designed for container bind mounts
+
+odinson {
+  # Base data directory - bind mount your data here
+  dataDir = "/data/odinson"
+
+  # Path to Odinson JSON documents to be indexed
+  docsDir = ${odinson.dataDir}/docs
+
+  # Path where Lucene index will be created
+  indexDir = ${odinson.dataDir}/index
+
+  index {
+    # Fields to store in the index for retrieval
+    storedFields = ["raw", "lemma", "fileName"]
+    
+    # Field name for tracking source file names
+    parentDocFieldFileName = "fileName"
+    
+    # Don't require documents to be ordered by ID (faster indexing)
+    synchronizeOrderWithDocumentId = false
+  }
+}
+INDEXER_CONF
+
+    # Create the indexing wrapper script
+    cat > /opt/index_documents.sh << 'WRAPPER_SCRIPT'
+#!/bin/bash
+set -euo pipefail
+
+# Odinson Document Indexer Wrapper Script
+# Usage: index_documents.sh [OPTIONS]
+#
+# Options:
+#   --docs-dir PATH    Directory containing Odinson JSON documents
+#   --index-dir PATH   Directory where Lucene index will be created
+#   --data-dir PATH    Base data directory (alternative to --docs-dir/--index-dir)
+#   --config PATH      Custom configuration file
+#   --help             Show this help message
+
+show_help() {
+    echo "Odinson Document Indexer"
+    echo ""
+    echo "Usage: index_documents.sh [OPTIONS]"
+    echo ""
+    echo "Options:"
+    echo "  --docs-dir PATH    Directory containing Odinson JSON documents"
+    echo "  --index-dir PATH   Directory where Lucene index will be created"
+    echo "  --data-dir PATH    Base data directory (docs/ and index/ subdirs)"
+    echo "  --config PATH      Custom configuration file"
+    echo "  --help             Show this help message"
+    echo ""
+    echo "Examples:"
+    echo "  # Using bind mounts with default paths"
+    echo "  index_documents.sh"
+    echo ""
+    echo "  # Specify custom directories"
+    echo "  index_documents.sh --docs-dir /data/json --index-dir /data/index"
+    echo ""
+    echo "  # Use a data directory structure"
+    echo "  index_documents.sh --data-dir /shared/mydata"
+}
+
+# Default values
+DOCS_DIR=""
+INDEX_DIR=""
+DATA_DIR=""
+CONFIG_FILE="/opt/odinson/indexer.conf"
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --docs-dir)
+            DOCS_DIR="$2"
+            shift 2
+            ;;
+        --index-dir)
+            INDEX_DIR="$2"
+            shift 2
+            ;;
+        --data-dir)
+            DATA_DIR="$2"
+            shift 2
+            ;;
+        --config)
+            CONFIG_FILE="$2"
+            shift 2
+            ;;
+        --help|-h)
+            show_help
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1"
+            show_help
+            exit 1
+            ;;
+    esac
+done
+
+# Build Java system properties for configuration overrides
+JAVA_OPTS="${JAVA_OPTS:--Xmx6G}"
+SYS_PROPS="-Dconfig.file=$CONFIG_FILE"
+
+if [ -n "$DATA_DIR" ]; then
+    SYS_PROPS="$SYS_PROPS -Dodinson.dataDir=$DATA_DIR"
+fi
+
+if [ -n "$DOCS_DIR" ]; then
+    SYS_PROPS="$SYS_PROPS -Dodinson.docsDir=$DOCS_DIR"
+fi
+
+if [ -n "$INDEX_DIR" ]; then
+    SYS_PROPS="$SYS_PROPS -Dodinson.indexDir=$INDEX_DIR"
+fi
+
+echo "============================================"
+echo "Odinson Document Indexer"
+echo "============================================"
+echo "Config file: $CONFIG_FILE"
+[ -n "$DATA_DIR" ] && echo "Data directory: $DATA_DIR"
+[ -n "$DOCS_DIR" ] && echo "Documents directory: $DOCS_DIR"
+[ -n "$INDEX_DIR" ] && echo "Index directory: $INDEX_DIR"
+echo "Java options: $JAVA_OPTS"
+echo "Start time: $(date)"
+echo "============================================"
+
+# Change to odinson directory and run IndexDocuments
+cd /opt/odinson
+exec sbt $SYS_PROPS "extra/runMain ai.lum.odinson.extra.IndexDocuments"
+WRAPPER_SCRIPT
+    chmod +x /opt/index_documents.sh
+
+    # Clean up sbt caches to reduce image size (keep compiled classes)
+    rm -rf ~/.sbt/boot/scala-*/lib/*.jar.desired.sha1
+    rm -rf ~/.ivy2/cache
+
+%environment
+    export LC_ALL=C.UTF-8
+    export LANG=C.UTF-8
+    export JAVA_OPTS="-Xmx6G"
+    export SBT_OPTS="-Xmx2G"
+    export PATH="/opt/odinson:$PATH"
+
+%runscript
+    exec /opt/index_documents.sh "$@"
+
+%help
+    Odinson Document Indexer Container
+    
+    This container indexes Odinson JSON documents into a Lucene index
+    for fast querying with Odinson patterns.
+
+    Prerequisites:
+        - Odinson JSON documents (produced by bioc_processor.sif or similar)
+
+    Usage:
+        # Build the container
+        singularity build odinson_indexer.sif odinson_indexer.def
+
+        # Basic usage with bind mounts (recommended)
+        singularity run \
+            --bind /path/to/json/docs:/data/odinson/docs \
+            --bind /path/to/output/index:/data/odinson/index \
+            odinson_indexer.sif
+
+        # Specify directories explicitly
+        singularity run \
+            --bind /shared:/shared \
+            odinson_indexer.sif \
+            --docs-dir /shared/bioc_output \
+            --index-dir /shared/odinson_index
+
+        # Use a single data directory
+        singularity run \
+            --bind /shared/mydata:/shared/mydata \
+            odinson_indexer.sif \
+            --data-dir /shared/mydata
+
+    Directory Structure Expected:
+        When using --data-dir:
+            /data/odinson/
+            ├── docs/          # Input: Odinson JSON files (*.json, *.json.gz)
+            └── index/         # Output: Lucene index files
+
+    Memory Requirements:
+        Default: 6GB heap (-Xmx6G)
+        For large datasets, increase via JAVA_OPTS environment variable:
+        
+        SINGULARITYENV_JAVA_OPTS="-Xmx16G" singularity run ...
+
+    Input Format:
+        Odinson JSON documents with the structure:
+        {
+            "id": "document_id",
+            "metadata": [...],
+            "sentences": [...]
+        }
+
+    Output:
+        Lucene index directory containing:
+        - segments_* files
+        - *.cfs, *.cfe files
+        - write.lock

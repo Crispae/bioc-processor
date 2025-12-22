@@ -1,4 +1,27 @@
-# HPC Setup for BioC Processing
+# HPC Setup for BioC Processing and Odinson Indexing
+
+This guide covers the complete workflow for processing BioC XML files and creating Odinson indexes on HPC clusters using Singularity containers.
+
+## Workflow Overview
+
+```
+Stage 1: Document Processing          Stage 2: Indexing
+┌─────────────────────────┐          ┌─────────────────────────┐
+│  BioC XML Files         │          │  Odinson JSON Files     │
+│  (*.BioC.XML)           │          │  (*.json)               │
+│           │             │          │           │             │
+│           ▼             │          │           ▼             │
+│  bioc_processor.sif     │   ───►   │  odinson_indexer.sif    │
+│  (Python + spaCy)       │          │  (JVM + Scala)          │
+│           │             │          │           │             │
+│           ▼             │          │           ▼             │
+│  Odinson JSON Files     │          │  Lucene Index           │
+└─────────────────────────┘          └─────────────────────────┘
+```
+
+---
+
+## Stage 1: BioC Document Processing
 
 ## Quick Start
 
@@ -181,4 +204,172 @@ The container includes `en_core_sci_lg`. If you need a different model, rebuild 
 ```bash
 singularity exec bioc_processor.sif python -m spacy download <model_name>
 ```
+
+---
+
+## Stage 2: Odinson Indexing
+
+After processing BioC files into Odinson JSON format, you can create a Lucene index for fast querying.
+
+### Build the Indexer Container
+
+```bash
+# On a build node (with sudo) or use --fakeroot
+cd /path/to/bio-processor
+sudo singularity build odinson_indexer.sif odinson_indexer.def
+```
+
+**Note:** Building this container takes longer than `bioc_processor.sif` because it compiles the Odinson Scala project. Plan for 10-15 minutes.
+
+### Run Indexing Manually
+
+```bash
+# Basic usage with bind mounts
+singularity run \
+    --bind /shared/bfr027/bioc_output:/data/odinson/docs \
+    --bind /shared/bfr027/odinson_index:/data/odinson/index \
+    odinson_indexer.sif
+
+# Specify directories explicitly
+singularity run \
+    --bind /shared/$USER:/shared/$USER \
+    odinson_indexer.sif \
+    --docs-dir /shared/$USER/bioc_output \
+    --index-dir /shared/$USER/odinson_index
+
+# Use a single data directory (expects docs/ and index/ subdirectories)
+singularity run \
+    --bind /shared/$USER/odinson_data:/data/odinson \
+    odinson_indexer.sif
+```
+
+### Submit Indexing Job
+
+Create a job script `submit_odinson_index.sh`:
+
+```bash
+#!/bin/bash
+#SBATCH --job-name=odinson_index
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=32G
+#SBATCH --time=08:00:00
+#SBATCH --output=logs/odinson_index_%j.out
+#SBATCH --error=logs/odinson_index_%j.err
+
+set -euo pipefail
+
+# Configuration - MODIFY THESE PATHS
+SHARED_ROOT="/shared/bfr027"
+DOCS_DIR="${SHARED_ROOT}/bioc_output"      # Where JSON files are stored
+INDEX_DIR="${SHARED_ROOT}/odinson_index"   # Where to create the index
+CONTAINER="${SHARED_ROOT}/odinson_indexer.sif"
+
+# Create output directory
+mkdir -p "$INDEX_DIR"
+mkdir -p logs
+
+echo "============================================"
+echo "Odinson Indexing Job"
+echo "Documents: $DOCS_DIR"
+echo "Index Output: $INDEX_DIR"
+echo "Start Time: $(date)"
+echo "============================================"
+
+# Run the indexer
+singularity run \
+    --bind /shared/$USER:/shared/$USER \
+    "$CONTAINER" \
+    --docs-dir "$DOCS_DIR" \
+    --index-dir "$INDEX_DIR"
+
+echo "============================================"
+echo "End Time: $(date)"
+echo "============================================"
+```
+
+Submit with:
+```bash
+sbatch submit_odinson_index.sh
+```
+
+### Indexing Resource Recommendations
+
+| Document Count | Memory | CPUs | Time |
+|----------------|--------|------|------|
+| < 10,000 docs  | 16G    | 4    | 1h   |
+| 10,000-50,000  | 32G    | 4    | 4h   |
+| > 50,000 docs  | 64G    | 4    | 8h+  |
+
+For very large datasets, increase Java heap:
+```bash
+SINGULARITYENV_JAVA_OPTS="-Xmx48G" singularity run ...
+```
+
+### Indexing Output Structure
+
+```
+/shared/user/odinson_index/
+├── segments_1
+├── write.lock
+├── _0.cfe
+├── _0.cfs
+├── _0.si
+└── ...
+```
+
+### Verify the Index
+
+After indexing, you can verify the index was created successfully:
+```bash
+ls -la /shared/$USER/odinson_index/
+# Should see segments_* and other Lucene index files
+```
+
+---
+
+## Complete Workflow Example
+
+```bash
+# 1. Build both containers
+sudo singularity build bioc_processor.sif bioc_processor.def
+sudo singularity build odinson_indexer.sif odinson_indexer.def
+
+# 2. Create file list for BioC processing
+find /data/pubmed -name "*.BioC.XML" > file_list.txt
+
+# 3. Submit document processing jobs
+./submit_chunks.sh
+
+# 4. Wait for all processing jobs to complete
+squeue -u $USER  # Monitor until all jobs finish
+
+# 5. Submit indexing job
+sbatch submit_odinson_index.sh
+
+# 6. Use the index for querying (requires Odinson extractor setup)
+```
+
+---
+
+## Troubleshooting Indexing
+
+### Out of Memory During Indexing
+```bash
+#SBATCH --mem=64G  # Increase memory
+# Also increase Java heap:
+SINGULARITYENV_JAVA_OPTS="-Xmx48G" singularity run ...
+```
+
+### Index Build Fails Partway Through
+The indexer does not have automatic resume. You may need to:
+1. Delete the partial index: `rm -rf /path/to/odinson_index/*`
+2. Re-run the indexing job
+
+### Missing or Malformed JSON Documents
+Check the indexer logs for errors:
+```bash
+grep -i "error\|failed\|exception" logs/odinson_index_*.out
+```
+
+Problematic files will be logged but won't stop the entire indexing process.
 
