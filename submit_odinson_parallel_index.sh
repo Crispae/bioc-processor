@@ -492,7 +492,7 @@ elif [ "$STRATEGY" == "range" ]; then
             create_index_from_list "$shard" "$FILE_LIST"
             
             if [ "$DRY_RUN" = false ]; then
-                while [ $(jobs -r | wc -l) -ge $MAX_PARALLEL_JOBS ]; then
+                while [ $(jobs -r | wc -l) -ge $MAX_PARALLEL_JOBS ]; do
                     sleep 1
                 done
             fi
