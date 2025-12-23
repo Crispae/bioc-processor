@@ -84,25 +84,39 @@ echo "Total JSON files: $TOTAL_COUNT"
 # Create symlinks for only the sections we want
 echo ""
 echo "Creating symlinks for selected sections..."
-echo "This may take several minutes for large collections..."
+echo "Using parallel processing for speed..."
 
-LINK_COUNT=0
+# Build find pattern for all sections at once
+FIND_PATTERN=""
 for section in $SECTIONS; do
-    echo -n "  Processing *_${section}.json... "
-    # Find files matching this section and create symlinks
-    SECTION_COUNT=0
-    while IFS= read -r -d '' file; do
-        # Create symlink in staging directory
-        # Use a flat structure with unique names to avoid collisions
+    if [ -z "$FIND_PATTERN" ]; then
+        FIND_PATTERN="-name *_${section}.json"
+    else
+        FIND_PATTERN="$FIND_PATTERN -o -name *_${section}.json"
+    fi
+done
+
+# Create symlinks in parallel using xargs
+# The awk command creates unique link names: parentfolder_filename
+echo "Finding and linking files (this may take 10-30 minutes for 14M files)..."
+find "$DOCS_DIR" \( $FIND_PATTERN \) -print0 2>/dev/null | \
+    xargs -0 -P 16 -I {} sh -c '
+        file="{}"
         basename_file=$(basename "$file")
-        # Add parent folder name to ensure uniqueness
         parent_folder=$(basename "$(dirname "$file")")
         link_name="${parent_folder}_${basename_file}"
-        ln -sf "$file" "${STAGING_DIR}/${link_name}"
-        ((SECTION_COUNT++)) || true
-        ((LINK_COUNT++)) || true
-    done < <(find "$DOCS_DIR" -name "*_${section}.json" -print0 2>/dev/null)
-    echo "$SECTION_COUNT files"
+        ln -sf "$file" "'"$STAGING_DIR"'/${link_name}"
+    '
+
+# Count created symlinks
+LINK_COUNT=$(find "$STAGING_DIR" -type l 2>/dev/null | wc -l)
+
+# Show per-section counts
+echo ""
+echo "Files per section:"
+for section in $SECTIONS; do
+    SECTION_COUNT=$(find "$STAGING_DIR" -name "*_${section}.json" -type l 2>/dev/null | wc -l)
+    echo "  ${section}: $SECTION_COUNT"
 done
 
 echo ""
