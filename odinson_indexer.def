@@ -10,9 +10,26 @@ From: lumai/odinson-extras:latest
     # Create default data directories
     mkdir -p /data/odinson/docs
     mkdir -p /data/odinson/index
+    
+    # Create app directory for our scripts (may not exist in base image)
+    mkdir -p /opt/odinson
+
+    # Discover the image structure and find index-documents binary
+    echo "=== Discovering image structure ==="
+    echo "Looking for index-documents binary..."
+    find / -name "index-documents" -type f 2>/dev/null || echo "No index-documents found via find"
+    echo ""
+    echo "Checking common locations..."
+    ls -la /opt/docker/bin/ 2>/dev/null || echo "/opt/docker/bin/ does not exist"
+    ls -la /app/bin/ 2>/dev/null || echo "/app/bin/ does not exist"
+    ls -la /bin/ 2>/dev/null | grep -i index || echo "No index in /bin/"
+    echo ""
+    echo "Contents of /opt/:"
+    ls -la /opt/ 2>/dev/null || echo "/opt/ listing failed"
+    echo "=== End discovery ==="
 
     # Create the indexer configuration file
-    cat > /app/indexer.conf << 'INDEXER_CONF'
+    cat > /opt/odinson/indexer.conf << 'INDEXER_CONF'
 # Odinson Indexer Configuration
 # These paths are designed for container bind mounts
 
@@ -40,7 +57,7 @@ odinson {
 INDEXER_CONF
 
     # Create the indexing wrapper script
-    cat > /app/index_documents.sh << 'WRAPPER_SCRIPT'
+    cat > /opt/odinson/index_documents.sh << 'WRAPPER_SCRIPT'
 #!/bin/bash
 set -euo pipefail
 
@@ -128,23 +145,41 @@ if [ "$DOC_COUNT" -eq 0 ]; then
     exit 1
 fi
 
-# Run the official odinson index-documents command
-# The lumai/odinson-extras image has bin/index-documents script
-exec /app/bin/index-documents \
+# Find and run the index-documents command
+# The lumai/odinson-extras image has the binary in different possible locations
+if [ -x "/opt/docker/bin/index-documents" ]; then
+    INDEX_CMD="/opt/docker/bin/index-documents"
+elif [ -x "/app/bin/index-documents" ]; then
+    INDEX_CMD="/app/bin/index-documents"
+elif [ -x "/bin/index-documents" ]; then
+    INDEX_CMD="/bin/index-documents"
+else
+    # Try to find it
+    INDEX_CMD=$(find / -name "index-documents" -type f -executable 2>/dev/null | head -1)
+    if [ -z "$INDEX_CMD" ]; then
+        echo "ERROR: Could not find index-documents binary"
+        echo "Searching for odinson-related files..."
+        find / -name "*odinson*" -o -name "*index*" 2>/dev/null | head -20
+        exit 1
+    fi
+fi
+
+echo "Using index command: $INDEX_CMD"
+exec "$INDEX_CMD" \
     -Dodinson.dataDir="$DATA_DIR" \
     -Dodinson.docsDir="$DOCS_DIR" \
     -Dodinson.indexDir="$INDEX_DIR"
 WRAPPER_SCRIPT
-    chmod +x /app/index_documents.sh
+    chmod +x /opt/odinson/index_documents.sh
 
 %environment
-    export HOME=/app
+    export HOME=/opt/odinson
     export LC_ALL=C.UTF-8
     export LANG=C.UTF-8
     export JAVA_OPTS="-Xmx6G"
 
 %runscript
-    exec /app/index_documents.sh "$@"
+    exec /opt/odinson/index_documents.sh "$@"
 
 %help
     Odinson Document Indexer Container
