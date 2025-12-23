@@ -28,6 +28,14 @@ From: lumai/odinson-extras:latest
     ls -la /opt/ 2>/dev/null || echo "/opt/ listing failed"
     echo "=== End discovery ==="
 
+    # Fix permissions on binaries (may lose execute bit during Docker->Singularity conversion)
+    if [ -d /opt/docker/bin ]; then
+        chmod +x /opt/docker/bin/* 2>/dev/null || true
+    fi
+    if [ -f /opt/docker/bin/index-documents ]; then
+        chmod +x /opt/docker/bin/index-documents
+    fi
+
     # Create the indexer configuration file
     cat > /opt/odinson/indexer.conf << 'INDEXER_CONF'
 # Odinson Indexer Configuration
