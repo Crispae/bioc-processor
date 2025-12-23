@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --job-name=odinson_bulk
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=64G
-#SBATCH --time=48:00:00
+#SBATCH --cpus-per-task=16
+#SBATCH --mem=128G
+#SBATCH --time=72:00:00
 #SBATCH --output=logs/odinson_bulk_%j.out
 #SBATCH --error=logs/odinson_bulk_%j.err
 
@@ -92,6 +92,8 @@ echo "============================================"
 
 # Run the container with the parent directory
 # Odinson will recursively find all JSON files in subdirectories
+# Set Java heap to 96GB for large-scale indexing (14M+ documents)
+export SINGULARITYENV_JAVA_OPTS="-Xmx96G -XX:+UseG1GC"
 singularity run -c --bind /shared/$USER:/shared/$USER,/home/$USER:/home/$USER --net --network none /shared/$USER/bioc-processor/odinson_indexer.sif --docs-dir "$DOCS_DIR" --index-dir "$INDEX_DIR" 2>&1
 
 EXIT_CODE=$?
