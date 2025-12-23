@@ -147,24 +147,64 @@ fi
 
 # Find and run the index-documents command
 # The lumai/odinson-extras image has the binary in different possible locations
-if [ -x "/opt/docker/bin/index-documents" ]; then
-    INDEX_CMD="/opt/docker/bin/index-documents"
-elif [ -x "/app/bin/index-documents" ]; then
-    INDEX_CMD="/app/bin/index-documents"
-elif [ -x "/bin/index-documents" ]; then
-    INDEX_CMD="/bin/index-documents"
-else
-    # Try to find it
-    INDEX_CMD=$(find / -name "index-documents" -type f -executable 2>/dev/null | head -1)
-    if [ -z "$INDEX_CMD" ]; then
-        echo "ERROR: Could not find index-documents binary"
-        echo "Searching for odinson-related files..."
-        find / -name "*odinson*" -o -name "*index*" 2>/dev/null | head -20
-        exit 1
+echo "Searching for index-documents binary..." >&2
+
+INDEX_CMD=""
+# Check common locations
+for path in "/opt/docker/bin/index-documents" "/app/bin/index-documents" "/bin/index-documents" "/usr/local/bin/index-documents"; do
+    if [ -f "$path" ]; then
+        echo "Found at: $path" >&2
+        if [ -x "$path" ]; then
+            INDEX_CMD="$path"
+            break
+        else
+            echo "File exists but not executable, trying anyway..." >&2
+            INDEX_CMD="$path"
+            break
+        fi
     fi
+done
+
+# If not found, search the filesystem
+if [ -z "$INDEX_CMD" ]; then
+    echo "Searching filesystem for index-documents..." >&2
+    INDEX_CMD=$(find / -name "index-documents" -type f 2>/dev/null | head -1)
 fi
 
-echo "Using index command: $INDEX_CMD"
+# If still not found, try relative paths from common working directories
+if [ -z "$INDEX_CMD" ]; then
+    echo "Trying relative paths from working directories..." >&2
+    for wd in "/app" "/opt/docker" "/"; do
+        if [ -f "${wd}/bin/index-documents" ]; then
+            INDEX_CMD="${wd}/bin/index-documents"
+            echo "Found at: $INDEX_CMD" >&2
+            break
+        fi
+    done
+fi
+
+# If still not found, try to find the main class or jar
+if [ -z "$INDEX_CMD" ]; then
+    echo "Binary not found, searching for Java classes..." >&2
+    # Check if we can run via sbt or find the jar
+    if command -v sbt >/dev/null 2>&1; then
+        echo "Found sbt, will try to run via sbt..." >&2
+        cd /opt/odinson 2>/dev/null || cd /app 2>/dev/null || true
+        exec sbt -Dodinson.dataDir="$DATA_DIR" -Dodinson.docsDir="$DOCS_DIR" -Dodinson.indexDir="$INDEX_DIR" "extra/runMain ai.lum.odinson.extra.IndexDocuments"
+    fi
+    
+    # Last resort: show what we found
+    echo "ERROR: Could not find index-documents binary or sbt" >&2
+    echo "Contents of /opt/docker:" >&2
+    ls -la /opt/docker/ 2>/dev/null || echo "  /opt/docker does not exist" >&2
+    echo "Contents of /app:" >&2
+    ls -la /app/ 2>/dev/null || echo "  /app does not exist" >&2
+    echo "Searching for odinson-related files..." >&2
+    find / -name "*odinson*" -type f 2>/dev/null | head -20 >&2
+    exit 1
+fi
+
+echo "Using index command: $INDEX_CMD" >&2
 exec "$INDEX_CMD" \
     -Dodinson.dataDir="$DATA_DIR" \
     -Dodinson.docsDir="$DOCS_DIR" \

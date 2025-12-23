@@ -67,7 +67,8 @@ echo "Found $DOC_COUNT JSON files to index"
 
 # Run the container (using cluster-required singularity format)
 # Note: Container path must be literal (not a variable) for cluster validation
-singularity run -c --bind /shared/$USER:/shared/$USER,/home/$USER:/home/$USER --net --network none /shared/$USER/bioc-processor/odinson_indexer.sif --docs-dir "$DOCS_DIR" --index-dir "$INDEX_DIR"
+# Redirect stderr to stdout to capture all error messages
+singularity run -c --bind /shared/$USER:/shared/$USER,/home/$USER:/home/$USER --net --network none /shared/$USER/bioc-processor/odinson_indexer.sif --docs-dir "$DOCS_DIR" --index-dir "$INDEX_DIR" 2>&1
 
 EXIT_CODE=$?
 
