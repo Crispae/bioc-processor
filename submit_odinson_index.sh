@@ -24,7 +24,7 @@ trap 'rc=$?; echo "Script exiting with code $rc"; exit $rc' EXIT
 # Configuration - MODIFY THESE PATHS
 SHARED_ROOT="/shared/bfr027"
 INDEX_BASE="${SHARED_ROOT}/odinson_index"
-CONTAINER="${SHARED_ROOT}/bioc-processor/odinson_indexer.sif"
+CONTAINER="/shared/$USER/bioc-processor/odinson_indexer.sif"
 
 # Get docs directory from argument or use default
 DOCS_DIR="${1:-}"
@@ -66,7 +66,8 @@ DOC_COUNT=$(find "$DOCS_DIR" -name "*.json" -o -name "*.json.gz" 2>/dev/null | w
 echo "Found $DOC_COUNT JSON files to index"
 
 # Run the container (using cluster-required singularity format)
-singularity run -c --bind /shared/$USER:/shared/$USER,/home/$USER:/home/$USER --net --network none "$CONTAINER" --docs-dir "$DOCS_DIR" --index-dir "$INDEX_DIR"
+# Note: Container path must be literal (not a variable) for cluster validation
+singularity run -c --bind /shared/$USER:/shared/$USER,/home/$USER:/home/$USER --net --network none /shared/$USER/bioc-processor/odinson_indexer.sif --docs-dir "$DOCS_DIR" --index-dir "$INDEX_DIR"
 
 EXIT_CODE=$?
 
